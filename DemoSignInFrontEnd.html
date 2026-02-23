@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Identity Demo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #0078d4; /* Azure Blue */
+            --bg: #0a0a0a;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1a1a2e, var(--bg));
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .login-card {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            width: 320px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .login-card:hover { transform: translateY(-5px); }
+
+        h3 { font-weight: 300; margin-bottom: 30px; letter-spacing: 1px; color: #ccc; }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px 12px 45px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border 0.3s;
+        }
+
+        input:focus { border-color: var(--primary); }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        button:hover { background: #005a9e; box-shadow: 0 0 15px rgba(0, 120, 212, 0.4); }
+
+        #status {
+            margin-top: 20px;
+            font-size: 12px;
+            min-height: 18px;
+            color: #aaa;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <i class="fa-solid fa-shield-halved" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
+    <h3>SECURE PORTAL</h3>
+    
+    <div class="input-group">
+        <i class="fa-regular fa-user"></i>
+        <input type="text" id="username" placeholder="Username" required autocomplete="off">
+    </div>
+    
+    <div class="input-group">
+        <i class="fa-solid fa-key"></i>
+        <input type="password" 
+               id="pin" 
+               placeholder="4-digit PIN" 
+               maxlength="4" 
+               inputmode="numeric"
+               oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+               required>
+    </div>
+    
+    <button onclick="sendData()" id="btnText">Sign In</button>
+    <p id="status"></p>
+</div>
+
+<script>
+    async function sendData() {
+        const userEl = document.getElementById('username');
+        const pinEl = document.getElementById('pin');
+        const statusEl = document.getElementById('status');
+        const btnText = document.getElementById('btnText');
+        
+        const user = userEl.value;
+        const pin = pinEl.value;
+        const logicAppUrl = "https://prod-24.eastus2.logic.azure.com:443/workflows/7450dc7d21694516b87cbd916c419922/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=5GSLIaMCYPqazpKnTcZwNW7sH3RYpiWtBMwaRRoKB70";
+
+        if (!user || pin.length !== 4) {
+            statusEl.innerHTML = '<span style="color: #ff4d4d;">Please enter valid credentials.</span>';
+            return;
+        }
+
+        btnText.innerHTML = '<div class="loader"></div> Processing...';
+        btnText.disabled = true;
+
+        try {
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            const realIP = ipData.ip;
+
+            const payload = {
+                username: user,
+                pin: pin,
+                timestamp: new Date().toISOString(),
+                clientIP: realIP,
+                action: "LoginAttempt"
+            };
+
+            const response = await fetch(logicAppUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                statusEl.innerHTML = '<i class="fa-solid fa-check" style="color: #4CAF50;"></i> Identity log ingested successfully.';
+                
+                pinEl.value = "";
+            } else {
+                statusEl.innerText = "Error: Transmission failed.";
+            }
+        } catch (e) {
+            statusEl.innerText = "Connection error.";
+        } finally {
+            btnText.innerHTML = "Sign In";
+            btnText.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
